@@ -1,4 +1,5 @@
 #include "detector.h"
+//#include "log.h"
 #include <ctime>
 #include <sys/time.h>
 #include <iostream>
@@ -14,7 +15,8 @@ Detector::Detector(){
 		exit(1);
 	}
 	
-	string cascade;
+	string cascade_szu;
+	string cascade_opencv;
 	string intradetect;
 	string intratrack;
 	dtype = UNKNOWN;
@@ -28,9 +30,12 @@ Detector::Detector(){
 		if (strcmp(tok,"TYPE")==0){
 			dt = strtok(NULL, " ");
 		}		
-		if (strcmp(tok,"CASCADE")==0){
-			cascade = strtok(NULL, " ");
+		if (strcmp(tok,"CASCADE_OPENCV")==0){
+			cascade_opencv = strtok(NULL, " ");
 		}
+		else if (strcmp(tok,"CASCADE_SZU")==0){
+			cascade_szu = strtok(NULL, " ");
+		}		
 		else if (strcmp(tok,"INTRADETECT")==0){
 			intradetect = strtok(NULL, " ");
 		}
@@ -40,20 +45,20 @@ Detector::Detector(){
 		fin.getline(line,1024);
 	}
 	if (strcmp(dt.data(),"SZU")==0){
-		faceCascade = LoadMBLBPCascade(cascade.data());
+		faceCascade = LoadMBLBPCascade(cascade_szu.data());
 		dtype = DSZU;
 	}
 	else if (strcmp(dt.data(),"OPENCV")==0){
-		HaarCascade = (CvHaarClassifierCascade*)cvLoad(cascade.data(), 0, 0, 0);
+		HaarCascade = (CvHaarClassifierCascade*)cvLoad(cascade_opencv.data(), 0, 0, 0);
 		dtype = DOPENCV;
 	}
 	else{
 		cout<<"Unknown detector cascade type"<<dtype<<endl;
 		exit(1);
 	}
-	if(faceCascade == NULL)
+	if(faceCascade == NULL && HaarCascade == NULL)
     {
-        printf("Couldn't load Face detector '%s'\n", cascade.data());
+        printf("Couldn't load Face detector '%s'\n", cascade_szu.data());
         exit(1);
     }
 	
@@ -112,7 +117,7 @@ Mat Detector::detect(const string imgname, int numLandmarks){
 
     // Detect all the faces in the greyscale image.
 	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
+		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 1000);
 	}
 	else if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
@@ -124,12 +129,11 @@ Mat Detector::detect(const string imgname, int numLandmarks){
 	gettimeofday(&end, NULL);	
     double elapsed = (end.tv_sec - begin.tv_sec) + 
               ((end.tv_usec - begin.tv_usec)/1000000.0);
-	//cout<<"Face detected in "<<elapsed<<" seconds"<<endl;	
+	
+	//nFaces = rects->total;
+	//cout<<"Face detected in "<<elapsed<<" seconds, faces: "<<nFaces<<endl;	
 	gettimeofday(&begin, NULL);
-	nFaces = rects->total;
-
 	if (nFaces != 1){
-		storage = cvCreateMemStorage(0);
 		cvReleaseMemStorage(&storage);
 		cvReleaseImage(&frame_bw);
 		cvReleaseImage(&frame);	
@@ -180,6 +184,7 @@ Mat Detector::detect(const string imgname, Mat& landmarks, int* pose, int numLan
 	if (frame == NULL)
     {
       fprintf(stderr, "Cannot open image %s.Returning empty Mat...\n", imgname.data());
+	  //LOGGER(INFO,"Detector","detect", "Cannot open image");
       return resized;
     }
 	
@@ -198,7 +203,7 @@ Mat Detector::detect(const string imgname, Mat& landmarks, int* pose, int numLan
 	
 	// convert image to grayscale
     IplImage *frame_bw = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);
-    cvConvertImage(frame, frame_bw);
+	cvConvertImage(frame, frame_bw);
 	Mat frame_mat(frame, 1);
 	// Smallest face size.
     CvSize minFeatureSize = cvSize(100, 100);
@@ -231,111 +236,6 @@ Mat Detector::detect(const string imgname, Mat& landmarks, int* pose, int numLan
 	nFaces = rects->total;
 
 	if (nFaces != 1){
-		storage = cvCreateMemStorage(0);
-		cvReleaseMemStorage(&storage);
-		cvReleaseImage(&frame_bw);
-		cvReleaseImage(&frame);	
-		return resized;
-	}
-		
-	int iface = 0;
-	CvRect *r = (CvRect*)cvGetSeqElem(rects, iface);
-	
-	//Face landmark detection
-	float score, notFace = 0.5;
-	Rect rect(r->x, r->y, r->width, r->height);
-	INTRAFACE::HeadPose hp;
-
-	gettimeofday(&begin, NULL);
-	if (faceLandmark->Detect(frame_mat, rect, landmarks, score) == INTRAFACE::IF_OK)
-	{
-		faceLandmark->EstimateHeadPose(landmarks,hp);
-		for (int i = 0; i < 3; i++){
-			pose[i] = hp.angles[i];
-		}
-		// only draw valid faces
-		if (score >= notFace) {
-			for (int i = 0 ; i < landmarks.cols ; i++)
-				cv::circle(frame_mat,cv::Point((int)landmarks.at<float>(0,i), (int)landmarks.at<float>(1,i)), 2, cv::Scalar(0,255,0), -1);
-		}
-		else{
-			//cout<<"False positive face"<<endl;
-			return resized;
-		}
-	}
-	else
-	{
-		//cout<<"Landmark detection failed"<<endl;
-		return resized;
-	}
-	gettimeofday(&end, NULL);	
-    elapsed = (end.tv_sec - begin.tv_sec) + 
-              ((end.tv_usec - begin.tv_usec)/1000000.0);
-	//cout<<"Landmarks detected in "<<elapsed<<" seconds"<<endl;
-	return frame_mat;
-}
-
-Mat Detector::detectNorm(string imgname){
-	Mat resized;
-	struct timeval begin, end;
-	gettimeofday(&begin, NULL);
-	
-	IplImage *frame = cvLoadImage(imgname.data(), 2|4);
-	if (frame == NULL)
-    {
-      fprintf(stderr, "Cannot open image %s.Returning empty Mat...\n", imgname.data());
-      return resized;
-    }
-	
-	else if (frame->width < 50 || frame->height < 50)
-    {
-      fprintf(stderr, "image %s too small.Returning empty Mat...\n", imgname.data());
-      cvReleaseImage(&frame);
-	  return resized;
-    }	
-	else if (frame->width > 100000 || frame->height > 100000)
-    {
-      fprintf(stderr, "image %s too large.Returning empty Mat...\n", imgname.data());
-      cvReleaseImage(&frame);
-	  return resized;
-    }
-	
-	// convert image to grayscale
-    IplImage *frame_bw = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);
-    cvConvertImage(frame, frame_bw);
-	Mat frame_mat(frame, 1);
-	// Smallest face size.
-    CvSize minFeatureSize = cvSize(100, 100);
-    int flags =  CV_HAAR_DO_CANNY_PRUNING;
-    // How detailed should the search be.
-    float search_scale_factor = 1.1f;
-    CvMemStorage* storage;
-    CvSeq* rects;
-    int nFaces;
-	
-    storage = cvCreateMemStorage(0);
-    cvClearMemStorage(storage);
-
-    // Detect all the faces in the greyscale image.
-	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
-	}
-	else if (dtype == DOPENCV){
-		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
-	}
-	else{
-		cout<<"Unknown detector type: "<<dtype<<endl;
-		return resized;
-	}
-	gettimeofday(&end, NULL);	
-    double elapsed = (end.tv_sec - begin.tv_sec) + 
-              ((end.tv_usec - begin.tv_usec)/1000000.0);
-	//cout<<"Face detected in "<<elapsed<<" seconds"<<endl;	
-	gettimeofday(&begin, NULL);
-	nFaces = rects->total;
-
-	if (nFaces != 1){
-		storage = cvCreateMemStorage(0);
 		cvReleaseMemStorage(&storage);
 		cvReleaseImage(&frame_bw);
 		cvReleaseImage(&frame);	
@@ -446,7 +346,6 @@ Mat Detector::detectNorm(string imgname){
 	}
 	//return resized;
 	
-	storage = cvCreateMemStorage(0);
 	cvReleaseMemStorage(&storage);
 	cvReleaseImage(&frame_bw);
 	cvReleaseImage(&frame);
@@ -503,7 +402,7 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 
     // Detect all the faces in the greyscale image.
 	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
+		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 1000);
 	}
 	else if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
@@ -519,13 +418,6 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 	gettimeofday(&begin, NULL);
 	nFaces = rects->total;
 
-	/*if (nFaces != 1){
-		storage = cvCreateMemStorage(0);
-		cvReleaseMemStorage(&storage);
-		cvReleaseImage(&frame_bw);
-		cvReleaseImage(&frame);
-		return resized;
-	}*/
 	bool isdetect = false;
 	INTRAFACE::HeadPose hp;
 	for (int iface = 0; iface < nFaces; iface++){
@@ -562,13 +454,12 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 	}
 	
 	if (!isdetect){
-		storage = cvCreateMemStorage(0);
 		cvReleaseMemStorage(&storage);
 		cvReleaseImage(&frame_bw);
 		cvReleaseImage(&frame);
 		return resized;	
 	}
-
+	
 	gettimeofday(&end, NULL);	
     elapsed = (end.tv_sec - begin.tv_sec) + 
               ((end.tv_usec - begin.tv_usec)/1000000.0);
@@ -608,7 +499,7 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 			maxy = landmarks.at<float>(1,i);
 		}
 	}
-
+	
 	//TODO: validate min max
 
 	//extend to rectangle
@@ -669,28 +560,33 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 	
 	
 	if (numLandmarks == 5){
-		Mat newLandmarks(2, 5, CV_64F);
+		Mat newlandmarks(2, 5, CV_64F);
 		//left eye
 		for (int i = 0; i < 2; i++)
-			newLandmarks.at<float>(i,0) = (landmarks.at<float>(i,19) + landmarks.at<float>(i,22))/2;
+			newlandmarks.at<float>(i,0) = (landmarks.at<float>(i,19) + landmarks.at<float>(i,22))/2;
 			
 		//right eye
 		for (int i = 0; i < 2; i++)
-			newLandmarks.at<float>(i,1) = (landmarks.at<float>(i,25) + landmarks.at<float>(i,28))/2;		
+			newlandmarks.at<float>(i,1) = (landmarks.at<float>(i,25) + landmarks.at<float>(i,28))/2;		
 		
 		//nose
 		for (int i = 0; i < 2; i++)
-			newLandmarks.at<float>(i,2) = landmarks.at<float>(i,13) ;
+			newlandmarks.at<float>(i,2) = landmarks.at<float>(i,13) ;
 			
 		//mouth left
 		for (int i = 0; i < 2; i++)
-			newLandmarks.at<float>(i,3) = landmarks.at<float>(i,31) ;		
+			newlandmarks.at<float>(i,3) = landmarks.at<float>(i,31) ;		
 		
 		//mouth right
 		for (int i = 0; i < 2; i++)
-			newLandmarks.at<float>(i,4) = landmarks.at<float>(i,37) ;
-			
-		landmarks = newLandmarks;
+			newlandmarks.at<float>(i,4) = landmarks.at<float>(i,37) ;
+		//landmarks.resize(5);
+		//for (int i = 0; i < 2; i++){
+		//	for (int j = 0; j < 5; j++){
+		//		landmarks.at<float>(i,j) = newlandmarks.at<float>(i,j);
+		//	}
+		//}
+		landmarks = newlandmarks;
 	}
 	if (showLandmark){
 		for (unsigned int i = 0; i < landmarks.cols; i++){
@@ -698,14 +594,13 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 		}
 	}
 	//clear stuff
-	storage = cvCreateMemStorage(0);
+	
+	gettimeofday(&end, NULL);	
+    elapsed = (end.tv_sec - begin.tv_sec) + ((end.tv_usec - begin.tv_usec)/1000000.0);
 	cvReleaseMemStorage(&storage);
 	cvReleaseImage(&frame_bw);
 	cvReleaseImage(&frame);
 	
-	gettimeofday(&end, NULL);	
-    elapsed = (end.tv_sec - begin.tv_sec) + 
-              ((end.tv_usec - begin.tv_usec)/1000000.0);
 	//cout<<"Face aligned in "<<elapsed<<" seconds"<<endl;	
 	return resized;
 }

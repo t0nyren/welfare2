@@ -14,6 +14,11 @@ class Recognizer{
 		int classify(const char* filename, int numReturns, int* ids, int* sims, string* imgpaths);
 		int classify(const Mat& img, const Mat& landmarks, int numReturns, int* ids, int* sims, string* imgpaths);
 		double evaluate();
+		int getWidth();
+		int getHeight();
+		int getPatchSize();
+		int getNumLandmarks();
+		
 	private:
 		Detector* detector;
 		Encoder* encoder;

@@ -14,6 +14,7 @@
 #include <sys/shm.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <omp.h>
 using namespace std;
 
 Recognizer::Recognizer(int patchSize, int cellSize, int binSize, int level, int width, int height, int numLandmarks){
@@ -210,7 +211,7 @@ int Recognizer::classify(const Mat& face, const Mat& landmarks, int numReturns, 
 			cvtColor(face, gray, CV_RGB2GRAY);
 		}
 		else if (face.channels() != 1){
-			//cout<<"cvtcolor failed"<<endl;
+			cout<<"cvtcolor failed"<<endl;
 			return -1;
 		}
 		else{
@@ -243,6 +244,7 @@ int Recognizer::classify(const Mat& face, const Mat& landmarks, int numReturns, 
 		cvflann::Matrix<float> query(code[j].data(), 1, descriptorSize);
 		cvflann::Matrix<int> indices(indices_array, 1, nn);
 		cvflann::Matrix<float> dists(dists_array, 1, nn);
+		char buf[100];
 		index[j]->knnSearch(query, indices, dists, nn, cvflann::SearchParams(128));
 		counts[ids[indices[0][0]]]++;
 		bool added = false;
@@ -267,8 +269,11 @@ int Recognizer::classify(const Mat& face, const Mat& landmarks, int numReturns, 
 	//max ids
 	int numRet = 0;
 	for (int i = 0; i < numReturns; i++){
+		//default ret
 		maxId[i] = i + 1;
 		sims[i] = rand()%10;
+		
+		//default img
 		for (int j = 0; j < ids.size(); j++){
 			if (ids[j] == maxId[i]){
 				maxImg[i] = imgs[j];
@@ -276,6 +281,7 @@ int Recognizer::classify(const Mat& face, const Mat& landmarks, int numReturns, 
 			}
 		}
 	}
+	
 	for (int i = 0; i < numReturns; i++){
 		bool found = false;
 		for (int j = 0; j < counts.size(); j++){
@@ -290,7 +296,11 @@ int Recognizer::classify(const Mat& face, const Mat& landmarks, int numReturns, 
 				if (add){
 					maxCount[i] = counts[j];
 					maxId[i] = j;
-					sims[i] = min(maxCount[i]*10, 100) - rand()%10;
+					//sims[i] = min(maxCount[i]*10, 100) - rand()%10;
+					sims[i] = maxCount[i] * 10 * 10 / 15;
+					if (sims[i] > 5 && sims[i] < 95){
+						 sims[i] += (5 - rand()%10);
+					}
 					found = true;
 				}
 			}
@@ -488,6 +498,8 @@ int Recognizer::loadModelFromSHM(){
 	}
 	cout<<ids.size()<<" "<<ids[ids.size()-1]<<" "<<imgs[ids.size()-1]<<endl;
 	cout<<"building kdtrees from shm"<<endl;
+	
+	#pragma omp parallel for
 	for (int i = 0; i < level * numLandmarks; i++){
 		cout<<"Building index for tree "<<i<<endl;
 		cvflann::Matrix<float> dataset(f_map + i*ids.size()*descriptorSize, ids.size(), descriptorSize);
@@ -690,4 +702,20 @@ double Recognizer::evaluate(){
 	avg /= fail_num.size();
 	cout<<"Incorrect: max: "<<max<<" min: "<<min<<" avg: "<<avg<<endl;	
 	return correct/ids.size();
+}
+
+int Recognizer::getWidth(){
+	return width;
+}
+
+int Recognizer::getHeight(){
+	return height;
+}
+
+int Recognizer::getPatchSize(){
+	return encoder->getPatchSize();
+}
+
+int Recognizer::getNumLandmarks(){
+	return numLandmarks;
 }
