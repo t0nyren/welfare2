@@ -5,14 +5,13 @@
 #include <sys/time.h>
 using namespace std;
 
-#define datpath "/mnt/B/datasets/baidu180/model.dat"
+#define modelpath "/mnt/B/datasets/experiment/model"
 int main(int argc, char** argv){
 	struct timeval begin, end;
 	
 	Recognizer rec;
-	//rec.cleanSHM();
-	//rec.loadModel(datpath);
-	rec.loadModelFromSHM();
+	rec.loadModel(modelpath);
+	double precision = rec.evaluate();
 	int* ids = new int[3];
 	int* sims = new int[3];
 	string* paths = new string[3];	

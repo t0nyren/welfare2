@@ -37,12 +37,12 @@ $(TARGET3) : $(OBJECTS) $(BUILD_DIR)/buildModelSHM.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB)
 
 $(TARGET4) : $(OBJECTS) $(BUILD_DIR)/loadModelSHM.o
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB)	
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB) -fopenmp -lpthread
 
 $(TARGET5) : $(OBJECTS) $(BUILD_DIR)/faceDetect.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB)	
 	
 $(BUILD_DIR)/%.o : $(SRC_DIR)/%.cpp
-	$(CXX) $(CXXFLAGS) -o $@ -c $< $(INCLUDE_FLAGS)
+	$(CXX) $(CXXFLAGS) -o $@ -c $< $(INCLUDE_FLAGS) -fopenmp
 clean:
 	$(RM) $(TARGET) $(OBJECTS)

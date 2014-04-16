@@ -4,7 +4,7 @@
 class Recognizer{
 	public:
 		Recognizer(int patchSize = 48, int cellSize = 8, int binSize = 58, int level = 3, int width = 144, int height = 192, int numLandmarks = 5);
-		void buildModel(const char* dirname, const char* filename, const char* csvname, const char* outdir = NULL, int startingID = 1);
+		void buildModel(const char* dirname, const char* csvname, const char* facedir, const char* modeldir, int startingID = 1);
 		void loadModel(const char* filename);
 		int writeModelToSHM();
 		int loadModelFromSHM();

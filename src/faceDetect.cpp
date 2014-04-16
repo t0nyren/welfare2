@@ -18,7 +18,7 @@ int main(int argc, char** argv){
 	int* pose = new int[3];
 	Mat landmarks;
 	//for (int i = 0; i < 100000; i++){
-	Mat face3 = detector.detectNorm(img3, 144, 192, 50, landmarks, 49, true);
+	Mat face3 = detector.detectNorm(img3, 144, 192, 50, landmarks, 49, false, true);
 		//Mat face3 = detector.detect(img3);
 
 	gettimeofday(&end, NULL);

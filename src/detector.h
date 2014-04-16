@@ -28,7 +28,7 @@ class Detector{
 		Mat detectNorm(const string imgname); 
 	
 		//normalize face to width x height, output landmarks, no. of landmarks can be 5, 49
-		Mat detectNorm(const string imgname, const float width, const float height, const float patchSize, Mat& landmarks, int numLandmarks = 49, bool showLandmark = true);
+		Mat detectNorm(const string imgname, const float width, const float height, const float patchSize, Mat& landmarks, int numLandmarks = 49, bool mirror = false, bool showLandmark = true);
 	private:
 		MBLBPCascade * faceCascade;
 		CvHaarClassifierCascade* HaarCascade;

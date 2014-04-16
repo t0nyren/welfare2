@@ -24,7 +24,7 @@ void *classify(void *threadid)
 	string* paths = new string[3];
 	for (int j = 0; j < 10; j++){
 		Mat landmarks;
-		Mat face = detector.detectNorm(img, rec.getWidth(), rec.getHeight(), rec.getPatchSize(), landmarks, rec.getNumLandmarks(), false);
+		Mat face = detector.detectNorm(img, rec.getWidth(), rec.getHeight(), rec.getPatchSize(), landmarks, rec.getNumLandmarks(), true, false);
 		int num = rec.classify(face, landmarks, 3, ids, sims, paths);
 		//int num = rec.classify(img, 3, ids, sims, paths);
 		for (int i = 0; i < num; i++){

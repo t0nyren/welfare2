@@ -35,54 +35,65 @@ Recognizer::Recognizer(int patchSize, int cellSize, int binSize, int level, int 
 	}
 }
 
-void Recognizer::buildModel(const char* dirname, const char* filename, const char* csvname, const char* outdir, int startingID){
-	if (outdir != NULL){
-		mkdir(outdir, S_IRWXU);
+void Recognizer::buildModel(const char* dirname, const char* csvname, const char* facedir, const char* modeldir, int startingID){
+	if (facedir != NULL){
+		mkdir(facedir, S_IRWXU);
 	}
-	ofstream fout;
-	fout.open(filename);
-	if (fout.fail()){
-		cout<<"fail to open filename"<<endl;
-		exit(1);
-	}
+	if (modeldir != NULL){
+		mkdir(modeldir, S_IRWXU);
+	}	
+
 	
 	ofstream csvout;
 	csvout.open(csvname);
 	if (csvout.fail()){
 		cout<<"fail to open csvname"<<endl;
+		exit(1);
 	}
 
 	DIR *pDIR;
 	struct dirent *entry;
-	struct stat buf;
 	pDIR = opendir(dirname);
 	if( pDIR == NULL){
 		std::cout<<"Cannot open image directory"<<std::endl;
 		exit(1);
 	}
 	
-	entry = readdir(pDIR);
-    int id = startingID;
-	while(entry != NULL)
-	{
-		if(0 == strcmp( ".", entry->d_name) || 0 == strcmp( "..", entry->d_name) ){
-			entry = readdir(pDIR);
-			continue;
+	//entry = readdir(pDIR);
+	vector<string> imgdirs;
+	vector<int> dirids;
+	int id = startingID;
+	while((entry = readdir(pDIR)) != NULL){
+		if(0 != strcmp( ".", entry->d_name) && 0 != strcmp( "..", entry->d_name) ){
+			imgdirs.push_back(string(entry->d_name));
+			dirids.push_back(id);
+			cout<<entry->d_name<<endl;
+			id++;
 		}
-		char * name = entry->d_name;
-		stat(name, &buf);
-		std::cout << name<<std::endl;
-		std::string s1 = outdir;
-		std::string s2 = name;
-		csvout<<id<<','<<name<<',';
-		int goodCount = 0;
-		char buf[10];
-		sprintf(buf, "%d", id);
+	}
+	closedir(pDIR);
+	vector<int> imgcounts(imgdirs.size());
+
+    
+	omp_set_num_threads(30);
+	#pragma omp parallel for
+	for (int i = 0; i < imgdirs.size(); i++){
+		Detector dd;
+		std::string s1 = facedir;
+		std::string s2 = imgdirs[i];
+		imgcounts[i] = 0;
+		char buf[100];
+		sprintf(buf, "%s/%d.dat", modeldir, dirids[i]);
+		ofstream fout;
+		fout.open(buf);
+		if (fout.fail()){
+			cout<<"fail to open filename"<<endl;
+			exit(1);
+		}
+		sprintf(buf, "%d", dirids[i]);
 		std::string dir_path = s1 + '/' + buf;
 		std::cout<<dir_path<<std::endl;
 		mkdir(dir_path.data(), S_IRWXU);
-
-		
 		DIR* pDIR2;
 		std::string s3 = dirname;
 		std::string origin_path = s3 + '/' + s2;
@@ -98,9 +109,9 @@ void Recognizer::buildModel(const char* dirname, const char* filename, const cha
 			std::string s4 = entry2->d_name;
 			std::string img_path = dir_path + '/' + s4;
 			std::string img_origin_path = origin_path + '/' + s4;
-			cout<<img_origin_path<<endl;
+			cout<<img_path<<endl;
 			Mat landmarks;
-			Mat face = detector->detectNorm(img_origin_path, width, height, encoder->getPatchSize(), landmarks, numLandmarks, false);
+			Mat face = dd.detectNorm(img_origin_path, width, height, encoder->getPatchSize(), landmarks, numLandmarks, true, false);
 			
 			if (!face.empty()){
 				Mat gray;
@@ -116,71 +127,87 @@ void Recognizer::buildModel(const char* dirname, const char* filename, const cha
 				}
 				vector<vector<float> > code = encoder->extractMultiLBP(gray, landmarks, level);
 				imwrite( img_path, face );
-				fout<<id<<" "<<img_path<<endl;
+				fout<<dirids[i]<<" "<<img_path<<endl;
 				for (int i = 0; i < code.size(); i++){
 					for (int j = 0; j < code[i].size(); j++){
 						fout<<code[i][j]<<" ";
 					}
 					fout<<endl;
 				}
-				goodCount++;
+				imgcounts[i]++;
 			}
 			entry2 = readdir(pDIR2);
 		}
-		csvout<<goodCount<<endl;
-		id++;
-		closedir(pDIR2);
-		entry = readdir(pDIR);             //Next person in directory        
+		fout.close();
+		closedir(pDIR2);      
 	}
-	closedir(pDIR);
-	csvout.close();
-	fout.close();		
+	for (int i = 0; i < imgdirs.size(); i++){
+		csvout<<id<<','<<imgdirs[i]<<','<<imgcounts[i]<<endl;
+	}
 }
 
-void Recognizer::loadModel(const char* filename){
-	ifstream fin;
-	fin.open(filename);
-	if (fin.fail()){
-		cout<<"Cannot open model file"<<endl;
+void Recognizer::loadModel(const char* modeldir){
+	DIR *pDIR;
+	struct dirent *entry;
+	pDIR = opendir(modeldir);
+	if( pDIR == NULL){
+		std::cout<<"Cannot open image directory"<<std::endl;
 		exit(1);
 	}
-	char line[5000];
-	fin.getline(line,5000);
-	cout<<"level: "<<level<<" landmarks: "<<numLandmarks<<endl;
-	int preid = -1;
-	while(!fin.eof()){
-		char *tok;
-		tok = strtok(line, " ");
-		int id = atoi(tok);
-		tok = strtok(NULL, " ");
-		
-		string imgname(tok);
-		cout<<id<<" "<<imgname<<endl;
-		ids.push_back(id);
-		imgs.push_back(imgname);
-		if (id != preid){
-			ppls.push_back(id);
-			preid = id;
+	
+	//entry = readdir(pDIR);
+	vector<string> modelfiles;
+	while((entry = readdir(pDIR)) != NULL){
+		if(0 != strcmp( ".", entry->d_name) && 0 != strcmp( "..", entry->d_name) ){
+			modelfiles.push_back(string(modeldir) + '/' + string(entry->d_name));
 		}
-		//get descriptors
-		for (int i = 0; i < level; i++){
-			for (int j = 0; j < numLandmarks; j++){
-				vector<float> descr;
-				for (int k = 0; k < descriptorSize; k++){
-					float val;
-					fin>>val;
-					features[i*numLandmarks + j].push_back(val);
-				}
-				//features.push_back(descr);
+	}
+	for (int i = 0; i < modelfiles.size(); i++){
+		ifstream fin;
+		fin.open(modelfiles[i].data());
+		if (fin.fail()){
+			cout<<"Cannot open model file"<<endl;
+			exit(1);
+		}
+		char line[5000];
+		fin.getline(line,5000);
+		cout<<"level: "<<level<<" landmarks: "<<numLandmarks<<endl;
+		int preid = -1;
+		while(!fin.eof()){
+			char *tok;
+			tok = strtok(line, " ");
+			int id = atoi(tok);
+			tok = strtok(NULL, " ");
+			
+			string imgname(tok);
+			cout<<id<<" "<<imgname<<endl;
+			ids.push_back(id);
+			imgs.push_back(imgname);
+			if (id != preid){
+				ppls.push_back(id);
+				preid = id;
 			}
+			//get descriptors
+			for (int i = 0; i < level; i++){
+				for (int j = 0; j < numLandmarks; j++){
+					vector<float> descr;
+					for (int k = 0; k < descriptorSize; k++){
+						float val;
+						fin>>val;
+						features[i*numLandmarks + j].push_back(val);
+					}
+					//features.push_back(descr);
+				}
+			}
+			fin.getline(line,5000);
+			fin.getline(line,5000);
 		}
-		fin.getline(line,5000);
-		fin.getline(line,5000);
+		fin.close();
 	}
 	cout<<"Features loaded, Num trees: "<<features.size()<<" num imgs: "<<features[0].size()/descriptorSize<<endl;
 	cout<<"ids: "<<ids.size()<<" num people: "<<ids[ids.size()-1]<<endl;
 	
-	
+	#pragma omp parallel for
 	for (int i = 0; i < features.size(); i++){
 		cout<<"Building index for tree "<<i<<endl;
 		cvflann::Matrix<float> dataset(features[i].data(), ids.size(), descriptorSize);
@@ -189,14 +216,14 @@ void Recognizer::loadModel(const char* filename){
 	}
 }
 Mat Recognizer::getFace(const char* filename, Mat& landmarks){
-	return detector->detectNorm(filename, width, height, encoder->getPatchSize(), landmarks, numLandmarks, false);
+	return detector->detectNorm(filename, width, height, encoder->getPatchSize(), landmarks, numLandmarks, true, false);
 }
 //return -1 for not found
 int Recognizer::classify(const char* filename, int numReturns, int* maxId, int* sims, string* maxImg){
 	struct timeval begin, end;
 	gettimeofday(&begin, NULL);
 	Mat landmarks;
-	Mat face = detector->detectNorm(filename, width, height, encoder->getPatchSize(), landmarks, numLandmarks, false);
+	Mat face = detector->detectNorm(filename, width, height, encoder->getPatchSize(), landmarks, numLandmarks, true, false);
 	return this->classify(face, landmarks, numReturns, maxId, sims, maxImg);
 }
 
@@ -602,25 +629,28 @@ double Recognizer::evaluate(){
 	float* dists_array = new float[nn];
 	double correct = 0;
 	vector<int> counts;
-	for (int i = 0; i < ids[ids.size()-1] + 1; i++){
+	for (int i = 0; i < ppls.size(); i++){
 		counts.push_back(0);
 	}
-/*	for (int i = 0; i < ids.size(); i++){	
+	for (int i = 0; i < ids.size(); i++){
+		//cout<<"eval id: "<<ids[i]<<endl;
 		vector<int> imgmatch;
 		vector<int> imgcounts;
 		for (int j = 0; j < features.size(); j++){
+			
 			vector<float> code;
 			for (int k = 0; k < descriptorSize; k++){
 				code.push_back(features[j][i*descriptorSize + k]);
 			}
+			//cout<<"checking landmark "<<j<<" code size: "<<code.size()<<" descrSize: "<<descriptorSize<<endl;
 			cvflann::Matrix<float> query(code.data(), 1, descriptorSize);
 			cvflann::Matrix<int> indices(indices_array, 1, nn);
 			cvflann::Matrix<float> dists(dists_array, 1, nn);
 			index[j]->knnSearch(query, indices, dists, nn, cvflann::SearchParams(128));
 				//cout<<i<<" "<<ids.size()<<" predict: "<<ids[indices[0][1]]<<" actual: "<<ids[i/10]<<endl;
-			counts[ids[indices[0][1]]]++;*/
-
-	for (int i = 0; i < ids.size(); i++){	
+			counts[ids[indices[0][1]]]++;
+			//cout<<"landmark "<<j<<": "<<ids[indices[0][1]]<<endl;
+	/*for (int i = 0; i < ids.size(); i++){	
 		vector<int> imgmatch;
 		vector<int> imgcounts;
 		for (int j = 0; j < level * numLandmarks; j++){
@@ -635,7 +665,7 @@ double Recognizer::evaluate(){
 			cvflann::Matrix<float> dists(dists_array, 1, nn);
 			index[j]->knnSearch(query, indices, dists, nn, cvflann::SearchParams(128));
 			//cout<<i<<" "<<ids.size()<<" predict: "<<ids[indices[0][1]]<<" actual: "<<ids[i]<<endl;
-			counts[ids[indices[0][1]]]++;			
+			counts[ids[indices[0][1]]]++;	*/		
 			bool added = false;
 			for (int k = 0; k < imgmatch.size(); k++){
 				if ( indices[0][1] == imgmatch[k]){
@@ -663,7 +693,7 @@ double Recognizer::evaluate(){
 				maxId = j;
 			}
 		}
-		//cout<<ids[i]<<" "<<maxId<<" "<<maxCount<<endl;
+		cout<<ids[i]<<" "<<maxId<<" "<<maxCount<<endl;
 		if (maxId == ids[i]){
 			correct++;
 			success_num.push_back(maxCount);
@@ -675,6 +705,9 @@ double Recognizer::evaluate(){
 			counts[j] = 0;
 		}
 	}
+	delete[] indices_array;
+	delete[] dists_array;
+	cout<<"Num of queries: "<<ids.size()<<" Num of corrects: "<<correct<<endl;
 	cout<<"accuracy: "<<correct/ids.size()<<endl;
 	
 	double avg = 0;

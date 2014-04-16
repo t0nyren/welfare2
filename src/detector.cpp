@@ -26,21 +26,22 @@ Detector::Detector(){
 	string dt;
 	while(!fin.eof()){
 		char *tok;
-		tok = strtok(line, " ");
+		char *p;
+		tok = strtok_r(line, " ", &p);
 		if (strcmp(tok,"TYPE")==0){
-			dt = strtok(NULL, " ");
+			dt = strtok_r(NULL, " ", &p);
 		}		
 		if (strcmp(tok,"CASCADE_OPENCV")==0){
-			cascade_opencv = strtok(NULL, " ");
+			cascade_opencv = strtok_r(NULL, " ", &p);
 		}
 		else if (strcmp(tok,"CASCADE_SZU")==0){
-			cascade_szu = strtok(NULL, " ");
+			cascade_szu = strtok_r(NULL, " ", &p);
 		}		
 		else if (strcmp(tok,"INTRADETECT")==0){
-			intradetect = strtok(NULL, " ");
+			intradetect = strtok_r(NULL, " ", &p);
 		}
 		else if (strcmp(tok,"INTRATRACK")==0){
-			intratrack = strtok(NULL, " ");
+			intratrack = strtok_r(NULL, " ", &p);
 		}		
 		fin.getline(line,1024);
 	}
@@ -117,7 +118,7 @@ Mat Detector::detect(const string imgname, int numLandmarks){
 
     // Detect all the faces in the greyscale image.
 	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 1000);
+		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
 	}
 	else if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
@@ -359,7 +360,7 @@ Mat Detector::detect(const string imgname, Mat& landmarks, int* pose, int numLan
 
 
 
-Mat Detector::detectNorm(const string filename, const float faceWidth, const float faceHeight, const float patchSize, Mat& landmarks, int numLandmarks, bool showLandmark){
+Mat Detector::detectNorm(const string filename, const float faceWidth, const float faceHeight, const float patchSize, Mat& landmarks, int numLandmarks, bool mirror, bool showLandmark){
 	Mat resized;
 	struct timeval begin, end;
 	gettimeofday(&begin, NULL);
@@ -402,7 +403,7 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 
     // Detect all the faces in the greyscale image.
 	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 1000);
+		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 700);
 	}
 	else if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
@@ -468,8 +469,9 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 	//imwrite( "./tmp/face.jpg" , frame_mat );
 	//Face alignment
 	int normSize = 100;
-	double angle = hp.angles[0];
-	Mat rotated = rotateImage(frame_mat, -angle);
+	double roll = hp.angles[0];
+	double pitch = hp.angles[1];
+	Mat rotated = rotateImage(frame_mat, -roll);
 	
 	//rotate landmarks
 	float minx = 10000;
@@ -479,7 +481,7 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 	
 	for (unsigned int i = 0; i < landmarks.cols; i++){
 		//cout<<X.at<float>(0,i)<<" "<<X.at<float>(1,i)<<endl;
-		rotatePoint(frame_mat, angle, (double)landmarks.at<float>(0,i), (double)landmarks.at<float>(1,i), landmarks.at<float>(0,i), landmarks.at<float>(1,i));
+		rotatePoint(frame_mat, roll, (double)landmarks.at<float>(0,i), (double)landmarks.at<float>(1,i), landmarks.at<float>(0,i), landmarks.at<float>(1,i));
 		//cout<<X.at<float>(0,i)<<" "<<X.at<float>(1,i)<<endl;
 		//cout<<"bbox: "<<minx<<" "<<miny<<" "<<maxx<<" "<<maxy<<endl;
 		//cout<<landmarks[i]<<" "<<landmarks[i+1]<<endl;
@@ -525,11 +527,10 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 	maxy += py + 2;
 	miny -= py + 2;
 	if (minx < 0 || miny < 0 || maxx > rotated.cols || maxy > rotated.rows){
-		//cout<<"Bounding box out of bound: "<<minx<<" "<<miny<<" "<<maxx<<" "<<maxy<<endl;
-		//cout<<"num of cols: "<<frame_mat.cols<<" "<<"num of rows:"<<frame_mat.rows<<endl;
 		//extend img
 		RNG rng(12345);
-		Scalar value = Scalar( rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255) );
+		//Scalar value = Scalar( rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255) );
+		Scalar value = Scalar( 0, 0, 0);
 		copyMakeBorder( rotated, rotated, patchSize, patchSize, patchSize, patchSize, BORDER_CONSTANT, value );
 		
 		minx += patchSize;
@@ -588,6 +589,13 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 		//}
 		landmarks = newlandmarks;
 	}
+	
+	if (mirror && pitch < 0){
+		flip(resized, resized, 1);
+		for (int i = 0; i < landmarks.cols; i++){
+			landmarks.at<float>(0,i) = resized.cols - landmarks.at<float>(0,i);
+		}
+	}	
 	if (showLandmark){
 		for (unsigned int i = 0; i < landmarks.cols; i++){
 			circle(resized, Point(landmarks.at<float>(0,i), landmarks.at<float>(1,i)), 3, Scalar(255,0,0));
