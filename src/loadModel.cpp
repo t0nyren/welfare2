@@ -9,7 +9,7 @@ using namespace std;
 int main(int argc, char** argv){
 	struct timeval begin, end;
 	
-	Recognizer rec;
+	Recognizer rec(5);
 	rec.loadModel(modelpath);
 	double precision = rec.evaluate();
 	int* ids = new int[3];
@@ -29,3 +29,4 @@ int main(int argc, char** argv){
 	}
 	return 0;
 }
+

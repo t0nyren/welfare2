@@ -558,7 +558,13 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 		landmarks.at<float>(0,i) = (landmarks.at<float>(0,i) - minx)/(maxx-minx)*faceWidth;
 		landmarks.at<float>(1,i) = (landmarks.at<float>(1,i)- miny)/(maxy-miny)*faceHeight;
 	}
-	
+
+	if (mirror && pitch < 0){
+		flip(resized, resized, 1);
+		for (int i = 0; i < landmarks.cols; i++){
+			landmarks.at<float>(0,i) = resized.cols - landmarks.at<float>(0,i);
+		}
+	}	
 	
 	if (numLandmarks == 5){
 		Mat newlandmarks(2, 5, CV_64F);
@@ -589,13 +595,270 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
 		//}
 		landmarks = newlandmarks;
 	}
-	
-	if (mirror && pitch < 0){
-		flip(resized, resized, 1);
-		for (int i = 0; i < landmarks.cols; i++){
-			landmarks.at<float>(0,i) = resized.cols - landmarks.at<float>(0,i);
+	//eye, eyebrow, eye-band,  nose-ver, mouth, left face, right face, jaw, forehead, nose-hor
+	//40x20x2, 40x20x2, 100x40, 40x60, 60x40, 40x60,40x60, 50x20, 100x40, 60x40
+	else if (numLandmarks == 36 || numLandmarks == 24){
+		Mat newlandmarks(2, 12, CV_64F);
+		float x1 = 10000;
+		float y1 = 10000;
+		float x2 = 0;
+		float y2 = 0;
+		//left eye
+		for (int i = 19; i <= 24; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
 		}
-	}	
+		newlandmarks.at<float>(0,0) = (x1+x2)/2;
+		newlandmarks.at<float>(1,0) = (y1+y2)/2;
+		
+		//right eye
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;
+		for (int i = 25; i <= 30; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		newlandmarks.at<float>(0,1) = (x1+x2)/2;
+		newlandmarks.at<float>(1,1) = (y1+y2)/2;
+
+		//left eyebrow
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;		
+		for (int i = 0; i <= 4; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		newlandmarks.at<float>(0,2) = (x1+x2)/2;
+		newlandmarks.at<float>(1,2) = (y1+y2)/2;
+		
+		//right eyebrow
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;
+		for (int i = 5; i <= 9; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		newlandmarks.at<float>(0,3) = (x1+x2)/2;
+		newlandmarks.at<float>(1,3) = (y1+y2)/2;		
+		
+		//eye band
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;		
+		for (int i = 0; i <= 9; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		for (int i = 19; i <= 30; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		newlandmarks.at<float>(0,4) = (x1+x2)/2;
+		newlandmarks.at<float>(1,4) = (y1+y2)/2;
+		
+		
+		
+		//nose vertical
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;		
+		for (int i = 10; i <= 18; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}		
+		newlandmarks.at<float>(0,5) = (x1+x2)/2;
+		newlandmarks.at<float>(1,5) = (y1+y2)/2;
+		
+		//mouth
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;		
+		for (int i = 31; i <= 42; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}		
+		newlandmarks.at<float>(0,6) = (x1+x2)/2;
+		newlandmarks.at<float>(1,6) = (y1+y2)/2;
+
+		//left face
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;
+		for (int i = 0; i <= 4; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		for (int i = 10; i <= 14; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}		
+		newlandmarks.at<float>(0,7) = (x1+x2)/2;
+		newlandmarks.at<float>(1,7) = (y1+y2)/2;		
+
+		//right face
+		x1 = 10000;
+		y1 = 10000;
+		x2 = 0;
+		y2 = 0;		
+		for (int i = 5; i <= 9; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}
+		for (int i = 10; i <= 14; i++){
+			if (landmarks.at<float>(0,i) < x1){
+				x1 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(0,i) > x2){
+				x2 = landmarks.at<float>(0,i);
+			}
+			if (landmarks.at<float>(1,i) < y1){
+				y1 = landmarks.at<float>(1,i);
+			}
+			if (landmarks.at<float>(1,i) > y2){
+				y2 = landmarks.at<float>(1,i);
+			}
+		}			
+		newlandmarks.at<float>(0,8) = (x1+x2)/2;
+		newlandmarks.at<float>(1,8) = (y1+y2)/2;		
+		
+		
+		//chin
+		newlandmarks.at<float>(0,9) = landmarks.at<float>(0,40);
+		newlandmarks.at<float>(1,9) = landmarks.at<float>(1,40) + 10;
+		
+		//forehead	
+		newlandmarks.at<float>(0,10) = (landmarks.at<float>(0,2)+landmarks.at<float>(0,7))/2;
+		newlandmarks.at<float>(1,10) = (landmarks.at<float>(1,2)+landmarks.at<float>(1,7))/2 - 10;
+
+		//nose horizontal
+		newlandmarks.at<float>(0,11) = landmarks.at<float>(0,16);
+		newlandmarks.at<float>(1,11) = landmarks.at<float>(1,16);
+		
+		landmarks = newlandmarks;		
+	}
+	
+
+	
 	if (showLandmark){
 		for (unsigned int i = 0; i < landmarks.cols; i++){
 			circle(resized, Point(landmarks.at<float>(0,i), landmarks.at<float>(1,i)), 3, Scalar(255,0,0));

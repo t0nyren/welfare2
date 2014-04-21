@@ -17,14 +17,17 @@
 #include <omp.h>
 using namespace std;
 
-Recognizer::Recognizer(int patchSize, int cellSize, int binSize, int level, int width, int height, int numLandmarks){
+Recognizer::Recognizer( int numLandmarks, int patchSize, int cellSize, int binSize, int level, int width, int height){
 	this->detector = new Detector();
 	this->encoder = new Encoder(patchSize, cellSize, binSize);
 	this->width = width;
 	this->height = height;
 	this->level = level;
 	this->numLandmarks = numLandmarks;
-	descriptorSize = pow(patchSize/cellSize, 2) * binSize;
+	if (numLandmarks == 36){
+		this->level = 1;	
+
+	}
 	for (int i = 0; i < level; i++){
 		for (int j = 0; j < numLandmarks; j++){
 			vector<float> empty;
@@ -125,12 +128,28 @@ void Recognizer::buildModel(const char* dirname, const char* csvname, const char
 				else{
 					gray = face;
 				}
-				vector<vector<float> > code = encoder->extractMultiLBP(gray, landmarks, level);
+				vector<vector<float> > code;
 				imwrite( img_path, face );
-				fout<<dirids[i]<<" "<<img_path<<endl;
-				for (int i = 0; i < code.size(); i++){
-					for (int j = 0; j < code[i].size(); j++){
-						fout<<code[i][j]<<" ";
+				if (numLandmarks == 36){
+					// code = encoder->extractTunedDSIFT(gray, landmarks);
+					code = encoder->extractTunedLBP(gray, landmarks);
+				}				
+				else
+					//code = encoder->extractMultiLBP(gray, landmarks, level);
+					code = encoder->extractMultiDSIFT(gray, landmarks, level);
+					
+				//output no. of landmarks, and size of each feature
+				if (imgcounts[i] == 0){
+					for (int c = 0; c < code.size(); c++){
+						descriptorSize.push_back(code[c].size());
+						fout<<code[c].size()<<" ";
+					}
+					fout<<endl;
+				}
+				fout<<dirids[i]<<" "<<img_path<<" "<<endl;
+				for (int c = 0; c < code.size(); c++){
+					for (int j = 0; j < code[c].size(); j++){
+						fout<<code[c][j]<<" ";
 					}
 					fout<<endl;
 				}
@@ -141,9 +160,11 @@ void Recognizer::buildModel(const char* dirname, const char* csvname, const char
 		fout.close();
 		closedir(pDIR2);      
 	}
+	cout<<"model output finished"<<endl;
 	for (int i = 0; i < imgdirs.size(); i++){
 		csvout<<id<<','<<imgdirs[i]<<','<<imgcounts[i]<<endl;
 	}
+	cout<<"csv output finished"<<endl;
 }
 
 void Recognizer::loadModel(const char* modeldir){
@@ -162,6 +183,7 @@ void Recognizer::loadModel(const char* modeldir){
 			modelfiles.push_back(string(modeldir) + '/' + string(entry->d_name));
 		}
 	}
+
 	for (int i = 0; i < modelfiles.size(); i++){
 		ifstream fin;
 		fin.open(modelfiles[i].data());
@@ -171,14 +193,25 @@ void Recognizer::loadModel(const char* modeldir){
 		}
 		char line[5000];
 		fin.getline(line,5000);
-		cout<<"level: "<<level<<" landmarks: "<<numLandmarks<<endl;
+		if (i == 0){
+			char *tok;
+			char *saveptr;
+			tok = strtok_r(line, " ", &saveptr);		
+			while(tok != NULL){
+				descriptorSize.push_back(atoi(tok));
+				cout<<atoi(tok)<<endl;
+				tok = strtok_r(NULL, " ", &saveptr);
+			}			
+		}
+		fin.getline(line,5000);
+		cout<<modelfiles[i].data()<<" level: "<<level<<" landmarks: "<<numLandmarks<<endl;
 		int preid = -1;
 		while(!fin.eof()){
 			char *tok;
-			tok = strtok(line, " ");
+			char *saveptr;
+			tok = strtok_r(line, " ", &saveptr);
 			int id = atoi(tok);
-			tok = strtok(NULL, " ");
-			
+			tok = strtok_r(NULL, " ", &saveptr);
 			string imgname(tok);
 			cout<<id<<" "<<imgname<<endl;
 			ids.push_back(id);
@@ -191,26 +224,29 @@ void Recognizer::loadModel(const char* modeldir){
 			for (int i = 0; i < level; i++){
 				for (int j = 0; j < numLandmarks; j++){
 					vector<float> descr;
-					for (int k = 0; k < descriptorSize; k++){
+					for (int k = 0; k < descriptorSize[i*numLandmarks + j]; k++){
 						float val;
 						fin>>val;
 						features[i*numLandmarks + j].push_back(val);
+						//cout<<i*numLandmarks + j<<" "<<k<<" "<<val<<endl;
 					}
 					//features.push_back(descr);
 				}
 			}
 			fin.getline(line,5000);
+			//cout<<line<<endl;
 			fin.getline(line,5000);
+			//cout<<line<<endl;
 		}
 		fin.close();
 	}
-	cout<<"Features loaded, Num trees: "<<features.size()<<" num imgs: "<<features[0].size()/descriptorSize<<endl;
-	cout<<"ids: "<<ids.size()<<" num people: "<<ids[ids.size()-1]<<endl;
+	cout<<"Features loaded, Num trees: "<<features.size()<<" num imgs: "<<features[0].size()/descriptorSize[0]<<endl;
+	cout<<"ids: "<<ids.size()<<" num people: "<<ppls.size()<<endl;
 	
 	#pragma omp parallel for
 	for (int i = 0; i < features.size(); i++){
 		cout<<"Building index for tree "<<i<<endl;
-		cvflann::Matrix<float> dataset(features[i].data(), ids.size(), descriptorSize);
+		cvflann::Matrix<float> dataset(features[i].data(), ids.size(), descriptorSize[i]);
 		index[i] = new cvflann::Index<cvflann::L2<float> >(dataset, cvflann::KDTreeIndexParams(10));
 		index[i]->buildIndex();
 	}
@@ -268,7 +304,7 @@ int Recognizer::classify(const Mat& face, const Mat& landmarks, int numReturns, 
 	//}
 	
 	for (int j = 0; j < features.size(); j++){
-		cvflann::Matrix<float> query(code[j].data(), 1, descriptorSize);
+		cvflann::Matrix<float> query(code[j].data(), 1, descriptorSize[j]);
 		cvflann::Matrix<int> indices(indices_array, 1, nn);
 		cvflann::Matrix<float> dists(dists_array, 1, nn);
 		char buf[100];
@@ -529,7 +565,7 @@ int Recognizer::loadModelFromSHM(){
 	#pragma omp parallel for
 	for (int i = 0; i < level * numLandmarks; i++){
 		cout<<"Building index for tree "<<i<<endl;
-		cvflann::Matrix<float> dataset(f_map + i*ids.size()*descriptorSize, ids.size(), descriptorSize);
+		cvflann::Matrix<float> dataset(f_map + i*ids.size()*descriptorSize[i], ids.size(), descriptorSize[i]);
 		//float* tmp = f_map + i*ids.size()*descriptorSize;
 		//cout<<tmp[0]<<" "<<tmp[1]<<endl;
 		index[i] = new cvflann::Index<cvflann::L2<float> >(dataset, cvflann::KDTreeIndexParams(10));
@@ -628,22 +664,29 @@ double Recognizer::evaluate(){
 	int* indices_array = new int[nn];
 	float* dists_array = new float[nn];
 	double correct = 0;
-	vector<int> counts;
-	for (int i = 0; i < ppls.size(); i++){
-		counts.push_back(0);
-	}
+	
+
+	
+	omp_lock_t writelock;
+	omp_init_lock(&writelock);
+	
+	#pragma omp parallel for
 	for (int i = 0; i < ids.size(); i++){
 		//cout<<"eval id: "<<ids[i]<<endl;
+		vector<int> counts;
+		for (int i = 0; i < ppls.size(); i++){
+			counts.push_back(0);
+		}		
 		vector<int> imgmatch;
 		vector<int> imgcounts;
 		for (int j = 0; j < features.size(); j++){
 			
 			vector<float> code;
-			for (int k = 0; k < descriptorSize; k++){
-				code.push_back(features[j][i*descriptorSize + k]);
+			for (int k = 0; k < descriptorSize[j]; k++){
+				code.push_back(features[j][i*descriptorSize[j] + k]);
 			}
 			//cout<<"checking landmark "<<j<<" code size: "<<code.size()<<" descrSize: "<<descriptorSize<<endl;
-			cvflann::Matrix<float> query(code.data(), 1, descriptorSize);
+			cvflann::Matrix<float> query(code.data(), 1, descriptorSize[j]);
 			cvflann::Matrix<int> indices(indices_array, 1, nn);
 			cvflann::Matrix<float> dists(dists_array, 1, nn);
 			index[j]->knnSearch(query, indices, dists, nn, cvflann::SearchParams(128));
@@ -694,6 +737,8 @@ double Recognizer::evaluate(){
 			}
 		}
 		cout<<ids[i]<<" "<<maxId<<" "<<maxCount<<endl;
+		
+		omp_set_lock(&writelock);
 		if (maxId == ids[i]){
 			correct++;
 			success_num.push_back(maxCount);
@@ -701,9 +746,7 @@ double Recognizer::evaluate(){
 		else{
 			fail_num.push_back(maxCount);
 		}
-		for (int j = 0; j < counts.size(); j++){
-			counts[j] = 0;
-		}
+		omp_unset_lock(&writelock);
 	}
 	delete[] indices_array;
 	delete[] dists_array;

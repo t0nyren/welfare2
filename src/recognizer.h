@@ -3,7 +3,7 @@
 
 class Recognizer{
 	public:
-		Recognizer(int patchSize = 48, int cellSize = 8, int binSize = 58, int level = 3, int width = 144, int height = 192, int numLandmarks = 5);
+		Recognizer(int numLandmarks = 5, int patchSize = 60, int cellSize = 8, int binSize = 58, int level = 4, int width = 144, int height = 192);
 		void buildModel(const char* dirname, const char* csvname, const char* facedir, const char* modeldir, int startingID = 1);
 		void loadModel(const char* filename);
 		int writeModelToSHM();
@@ -26,7 +26,7 @@ class Recognizer{
 		int width;
 		int height;
 		int numLandmarks;
-		int descriptorSize;
+		vector<int> descriptorSize;
 		vector<cvflann::Index<cvflann::L2<float> >* > index;
 		vector<string> imgs;
 		vector<int> ids;
