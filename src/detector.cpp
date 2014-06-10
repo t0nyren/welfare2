@@ -898,3 +898,231 @@ void Detector::rotatePoint(const Mat& source, double angle, const double& x1, co
 	x += x0;
 	y += y0;
 }
+
+void Detector::detectNorm(const Mat& capframe, const float width, const float height, const float patchSize, int maxNumFaces, int& numFaces, Mat* ret, Mat* landmarks_origin, Mat* landmarks, bool mirror, int numLandmarks, bool showLandmark){
+	//vector<Rect> faces;
+	//face_cascade.detectMultiScale(capframe, faces, 1.2, 2, 0, Size(50,50));
+
+	IplImage* frame = cvCloneImage(&(IplImage)capframe);
+	if (frame == NULL)
+    {
+      fprintf(stderr, "capframe is NULL.Returning empty Mat...\n");
+      return;
+    }
+	
+	else if (frame->width < 50 || frame->height < 50)
+    {
+      fprintf(stderr, "capframe too small.Returning empty Mat...\n");
+      cvReleaseImage(&frame);
+	  return;
+    }	
+	else if (frame->width > 100000 || frame->height > 100000)
+    {
+      fprintf(stderr, "capframe too large.Returning empty Mat...\n");
+      cvReleaseImage(&frame);
+	  return;
+    }
+	
+	// convert image to grayscale
+    IplImage *frame_bw = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);
+	
+    cvConvertImage(frame, frame_bw);
+	Mat frame_mat(frame, 1);
+	// Smallest face size.
+    CvSize minFeatureSize = cvSize(100, 100);
+    int flags =  CV_HAAR_DO_CANNY_PRUNING;
+    // How detailed should the search be.
+    float search_scale_factor = 1.1f;
+    CvMemStorage* storage;
+    CvSeq* rects;
+    int nFaces;
+	
+    storage = cvCreateMemStorage(0);
+    cvClearMemStorage(storage);
+	
+    // Detect all the faces in the greyscale image.
+	if (dtype == DSZU){
+		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
+	}
+	else if (dtype == DOPENCV){
+		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
+	}
+	else{
+		cout<<"Unknown detector type: "<<dtype<<endl;
+		return;
+	}
+	
+	nFaces = rects->total;
+
+	int detectcount = 0;
+	INTRAFACE::HeadPose hp; //roll, yaw, pitch
+	for (int iface = 0; iface < nFaces; iface++){
+		//Face landmark detection
+		CvRect *r = (CvRect*)cvGetSeqElem(rects, iface);
+		float score, notFace = 0.5;
+		Rect rect(r->x, r->y, r->width, r->height);
+		if (faceLandmark->Detect(capframe, rect, landmarks[detectcount], score) == INTRAFACE::IF_OK)
+		{
+			
+			// only draw valid faces
+			if (score >= notFace) {
+				landmarks_origin[detectcount] = landmarks[detectcount].clone();
+				faceLandmark->EstimateHeadPose(landmarks[detectcount],hp);
+				double roll = hp.angles[0];
+				double pitch = hp.angles[1];
+				ret[detectcount] = norm(capframe, roll, pitch, width, height, patchSize, landmarks_origin[detectcount], landmarks[detectcount], mirror, numLandmarks, showLandmark);
+				detectcount++;
+				if (detectcount > maxNumFaces)
+					break;
+			}
+			else{
+				//cout<<"False positive face"<<endl;
+				continue;
+			}
+		}
+		else
+		{
+			//cout<<"Landmark detection failed"<<endl;
+			continue;
+		}
+	}
+	numFaces = detectcount;
+	cvReleaseMemStorage(&storage);
+	cvReleaseImage(&frame_bw);
+	cvReleaseImage(&frame);
+}
+
+Mat Detector::norm(const Mat& frame_mat, double roll, double pitch, const float faceWidth, const float faceHeight, const float patchSize, Mat& landmarks_orgin, Mat& landmarks, bool mirror, int numLandmarks, bool showLandmark){
+
+	Mat rotated = rotateImage(frame_mat, -roll);
+	Mat resized;
+	//rotate landmarks
+	float minx = 10000;
+	float maxx = 0;
+	float miny = 10000;
+	float maxy = 0;
+	
+	for (unsigned int i = 0; i < landmarks.cols; i++){
+		//cout<<X.at<float>(0,i)<<" "<<X.at<float>(1,i)<<endl;
+		rotatePoint(frame_mat, roll, (double)landmarks.at<float>(0,i), (double)landmarks.at<float>(1,i), landmarks.at<float>(0,i), landmarks.at<float>(1,i));
+		//cout<<X.at<float>(0,i)<<" "<<X.at<float>(1,i)<<endl;
+		//cout<<"bbox: "<<minx<<" "<<miny<<" "<<maxx<<" "<<maxy<<endl;
+		//cout<<landmarks[i]<<" "<<landmarks[i+1]<<endl;
+		//circle(rotated, Point(landmarks.at<float>(0,i), landmarks.at<float>(1,i)), 2, Scalar(255,0,0));
+		if (landmarks.at<float>(0,i)  < minx ){
+			minx = landmarks.at<float>(0,i) ;
+		}
+		if (landmarks.at<float>(0,i) > maxx){
+			maxx = landmarks.at<float>(0,i) ;
+		}
+		
+		if (landmarks.at<float>(1,i)  < miny){
+			miny = landmarks.at<float>(1,i) ;
+		}
+		
+		if (landmarks.at<float>(1,i) > maxy){
+			maxy = landmarks.at<float>(1,i);
+		}
+	}
+
+	//TODO: validate min max
+
+	//extend to rectangle
+	float whRatio = (faceWidth - patchSize)/(faceHeight - patchSize);
+	float curRatio = (maxx-minx)/(maxy-miny);
+	if (curRatio >= whRatio){
+		//fit width, extend height
+		float region =  (maxx-minx)/whRatio -(maxy-miny);
+		miny -= region/2;
+		maxy += region/2;
+	}
+	else{
+		//fit height, extend width
+		float region = (maxy - miny)*whRatio - (maxx-minx);
+		minx -= region/2;
+		maxx += region/2;
+	}
+	//extend scaled patch
+	float px = (maxx-minx)/(faceWidth-patchSize)*patchSize/2;
+	float py = (maxy-miny)/(faceHeight-patchSize)*patchSize/2;
+	maxx += px + 2;
+	minx -= px + 2;
+	maxy += py + 2;
+	miny -= py + 2;
+	if (minx < 0 || miny < 0 || maxx > rotated.cols || maxy > rotated.rows){
+		//cout<<"Bounding box out of bound: "<<minx<<" "<<miny<<" "<<maxx<<" "<<maxy<<endl;
+		//cout<<"num of cols: "<<frame_mat.cols<<" "<<"num of rows:"<<frame_mat.rows<<endl;
+		//extend img
+		RNG rng(12345);
+		Scalar value = Scalar( rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255) );
+		copyMakeBorder( rotated, rotated, patchSize, patchSize, patchSize, patchSize, BORDER_CONSTANT, value );
+		
+		minx += patchSize;
+		miny += patchSize;
+		maxx += patchSize;
+		maxy += patchSize;
+		for (unsigned int i = 0; i < landmarks.cols; i++){
+			landmarks.at<float>(0,i) = landmarks.at<float>(0,i) + patchSize;
+			landmarks.at<float>(1,i) = landmarks.at<float>(1,i) + patchSize;
+		}
+		if (minx < 0 || miny < 0 || maxx > rotated.cols || maxy > rotated.rows){
+			cout<<"Bounding box out of bound: "<<minx<<" "<<miny<<" "<<maxx<<" "<<maxy<<endl;
+			cout<<"num of cols: "<<rotated.cols<<" "<<"num of rows:"<<rotated.rows<<endl;
+			return resized;
+		}
+		//return resized;
+	}
+	
+	//resize
+	//cout<<minx<<" "<<miny<<" "<<maxx<<" "<<maxy<<endl;
+	Mat roi(rotated, Rect(minx,miny,maxx-minx,maxy-miny));
+
+	resize(roi, resized, Size(faceWidth, faceHeight));
+	//cout<<"Num of landmarks: "<<landmarks.cols<<" type: "<<landmarks.type()<<endl;
+	for (unsigned int i = 0; i < landmarks.cols; i++){
+		landmarks.at<float>(0,i) = (landmarks.at<float>(0,i) - minx)/(maxx-minx)*faceWidth;
+		landmarks.at<float>(1,i) = (landmarks.at<float>(1,i)- miny)/(maxy-miny)*faceHeight;
+	}
+	
+	
+	if (numLandmarks == 5){
+		Mat newLandmarks(2, 5, CV_64F);
+		//left eye
+		for (int i = 0; i < 2; i++)
+			newLandmarks.at<float>(i,0) = (landmarks.at<float>(i,19) + landmarks.at<float>(i,22))/2;
+			
+		//right eye
+		for (int i = 0; i < 2; i++)
+			newLandmarks.at<float>(i,1) = (landmarks.at<float>(i,25) + landmarks.at<float>(i,28))/2;		
+		
+		//nose
+		for (int i = 0; i < 2; i++)
+			newLandmarks.at<float>(i,2) = landmarks.at<float>(i,13) ;
+			
+		//mouth left
+		for (int i = 0; i < 2; i++)
+			newLandmarks.at<float>(i,3) = landmarks.at<float>(i,31) ;		
+		
+		//mouth right
+		for (int i = 0; i < 2; i++)
+			newLandmarks.at<float>(i,4) = landmarks.at<float>(i,37) ;
+			
+		landmarks = newLandmarks;
+	}
+
+	//mirror
+	if (mirror && pitch < 0){
+		flip(resized, resized, 1);
+		for (int i = 0; i < landmarks.cols; i++){
+			landmarks.at<float>(0,i) = resized.cols - landmarks.at<float>(0,i);
+			//landmarks.at<float>(1,i) = resized.rows - landmarks.at<float>(1,i);
+		}
+	}
+
+	if (showLandmark){
+		for (unsigned int i = 0; i < landmarks.cols; i++){
+			circle(resized, Point(landmarks.at<float>(0,i), landmarks.at<float>(1,i)), 3, Scalar(255,0,0));
+		}
+	}
+	return resized;
+}

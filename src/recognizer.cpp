@@ -795,3 +795,6 @@ int Recognizer::getPatchSize(){
 int Recognizer::getNumLandmarks(){
 	return numLandmarks;
 }
+void Recognizer::getFaces(const Mat& frame,  int maxNumFaces, int& numFaceRet, Mat* faces, Mat* landmarks_origin, Mat* landmarks){
+	detector->detectNorm(frame, width, height, encoder->getPatchSize(), maxNumFaces, numFaceRet, faces, landmarks_origin, landmarks, true, numLandmarks, false);
+}

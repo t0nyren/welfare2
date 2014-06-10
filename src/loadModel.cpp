@@ -6,6 +6,7 @@
 using namespace std;
 
 #define modelpath "/mnt/B/datasets/experiment/model"
+
 int main(int argc, char** argv){
 	struct timeval begin, end;
 	

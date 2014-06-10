@@ -22,10 +22,11 @@ TARGET2 = $(BIN_DIR)/loadModel
 TARGET3 = $(BIN_DIR)/buildModelSHM
 TARGET4 = $(BIN_DIR)/loadModelSHM
 TARGET5 = $(BIN_DIR)/faceDetect
+TARGET6 = $(BIN_DIR)/faceRec
 
 .PHONY: all clean
 
-all: $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4) $(TARGET5)
+all: $(TARGET1) $(TARGET2) $(TARGET3) $(TARGET4) $(TARGET5) $(TARGET6)
 	
 $(TARGET1) : $(OBJECTS) $(BUILD_DIR)/buildModel.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB)
@@ -41,7 +42,10 @@ $(TARGET4) : $(OBJECTS) $(BUILD_DIR)/loadModelSHM.o
 
 $(TARGET5) : $(OBJECTS) $(BUILD_DIR)/faceDetect.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB)	
-	
+
+$(TARGET6) : $(OBJECTS) $(BUILD_DIR)/faceRec.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_FLAGS) $(INTRAFACE_LIB)	
+
 $(BUILD_DIR)/%.o : $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ -c $< $(INCLUDE_FLAGS) -fopenmp
 clean:

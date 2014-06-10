@@ -11,6 +11,7 @@ class Recognizer{
 		void cleanSHM();
 		
 		Mat getFace(const char* filename, Mat& landmarks);
+		void getFaces(const Mat& frame,  int maxNumFaces, int& numFaceRet, Mat* faces, Mat* landmarks_origin, Mat* landmarks);
 		int classify(const char* filename, int numReturns, int* ids, int* sims, string* imgpaths);
 		int classify(const Mat& img, const Mat& landmarks, int numReturns, int* ids, int* sims, string* imgpaths);
 		double evaluate();
