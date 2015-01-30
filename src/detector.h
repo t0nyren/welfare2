@@ -7,7 +7,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <FaceAlignment.h>
 #include <string>
-#include "mblbp-detect.h"
+//#include "mblbp-detect.h"
 
 using namespace std;
 using namespace cv;
@@ -34,7 +34,7 @@ class Detector{
 		void detectNorm(const Mat& frame, const float width, const float height, const float patchSize, int maxNumFaces, int& numFaces, Mat* ret, Mat* landmarks_orgin, Mat* landmarks, bool reflect = false, int numLandmarks = 49, bool showLandmark = false);
 	
 	private:
-		MBLBPCascade * faceCascade;
+		//MBLBPCascade * faceCascade;
 		CvHaarClassifierCascade* HaarCascade;
 		FaceAlignment *faceLandmark;
 		XXDescriptor *xxd;

@@ -45,11 +45,7 @@ Detector::Detector(){
 		}		
 		fin.getline(line,1024);
 	}
-	if (strcmp(dt.data(),"SZU")==0){
-		faceCascade = LoadMBLBPCascade(cascade_szu.data());
-		dtype = DSZU;
-	}
-	else if (strcmp(dt.data(),"OPENCV")==0){
+	if (strcmp(dt.data(),"OPENCV")==0){
 		HaarCascade = (CvHaarClassifierCascade*)cvLoad(cascade_opencv.data(), 0, 0, 0);
 		dtype = DOPENCV;
 	}
@@ -57,7 +53,7 @@ Detector::Detector(){
 		cout<<"Unknown detector cascade type"<<dtype<<endl;
 		exit(1);
 	}
-	if(faceCascade == NULL && HaarCascade == NULL)
+	if(HaarCascade == NULL)
     {
         printf("Couldn't load Face detector '%s'\n", cascade_szu.data());
         exit(1);
@@ -117,10 +113,7 @@ Mat Detector::detect(const string imgname, int numLandmarks){
     cvClearMemStorage(storage);
 
     // Detect all the faces in the greyscale image.
-	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
-	}
-	else if (dtype == DOPENCV){
+	if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
 	}
 	else{
@@ -219,10 +212,7 @@ Mat Detector::detect(const string imgname, Mat& landmarks, int* pose, int numLan
     cvClearMemStorage(storage);
 
     // Detect all the faces in the greyscale image.
-	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
-	}
-	else if (dtype == DOPENCV){
+	if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
 	}
 	else{
@@ -402,10 +392,7 @@ Mat Detector::detectNorm(const string filename, const float faceWidth, const flo
     cvClearMemStorage(storage);
 
     // Detect all the faces in the greyscale image.
-	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 700);
-	}
-	else if (dtype == DOPENCV){
+	if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
 	}
 	else{
@@ -941,10 +928,7 @@ void Detector::detectNorm(const Mat& capframe, const float width, const float he
     cvClearMemStorage(storage);
 	
     // Detect all the faces in the greyscale image.
-	if (dtype == DSZU){
-		rects = MBLBPDetectMultiScale(frame_bw, faceCascade, storage, 1229, 1, 50, 500);
-	}
-	else if (dtype == DOPENCV){
+	if (dtype == DOPENCV){
 		rects = cvHaarDetectObjects(frame_bw, HaarCascade, storage, search_scale_factor, 2, flags, minFeatureSize);
 	}
 	else{

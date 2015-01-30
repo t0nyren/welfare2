@@ -1,5 +1,6 @@
 #include "encoder.h"
 #include "detector.h"
+#include <opencv2/flann/flann.hpp>
 
 class Recognizer{
 	public:

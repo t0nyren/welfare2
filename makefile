@@ -11,8 +11,7 @@ SRC_DIR := src
 BUILD_DIR := build
 BIN_DIR := bin
 
-OBJECTS =	$(BUILD_DIR)/mblbp-detect.o \
-			$(BUILD_DIR)/binary_model_file.o \
+OBJECTS =	$(BUILD_DIR)/binary_model_file.o \
 			$(BUILD_DIR)/detector.o \
 			$(BUILD_DIR)/encoder.o \
 			$(BUILD_DIR)/recognizer.o \
