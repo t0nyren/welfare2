@@ -3,6 +3,8 @@ welfare2
 
 Web-level Face Recognition Version 2
 
+Note: 本项目依赖于CMU的intraface, 由于该项目已商业化，现已将此library移除，如需要使用请联系Fernando De la Torre(ftorre1173@gmail.com).
+
 本项目实现了人脸检测，标定，建模以及识别四个功能。可用于linux或windows Visual Studio环境，所有依赖已包含在此项目中，无需安装其他第三方库。程序具体使用方式如下：
 
 ### faceDetect
